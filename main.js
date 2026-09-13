@@ -31,7 +31,7 @@
  * SmartScreen re-prompts.
  */
 
-const { app, BrowserWindow, ipcMain, Menu, shell, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, shell, dialog, screen } = require('electron');
 const { spawn, execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -650,13 +650,69 @@ function attachPiWebHandlers(proc) {
 }
 
 // ---------------------------------------------------------------------------
-// Window management
+// Window management & Bounds Persistence (Antigravity-like spacious default)
 // ---------------------------------------------------------------------------
 
+function getInitialWindowBounds() {
+  const settings = loadSettings();
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+
+  // Antigravity-like spacious desktop IDE default: ~85% of screen or 1440x900
+  const defaultWidth = Math.min(1440, Math.max(1280, Math.round(screenWidth * 0.85)));
+  const defaultHeight = Math.min(920, Math.max(800, Math.round(screenHeight * 0.85)));
+
+  const saved = settings.windowState;
+  if (saved && typeof saved.width === 'number' && typeof saved.height === 'number') {
+    return {
+      width: Math.max(800, saved.width),
+      height: Math.max(500, saved.height),
+      x: saved.x,
+      y: saved.y,
+      isMaximized: Boolean(saved.isMaximized),
+    };
+  }
+
+  return {
+    width: defaultWidth,
+    height: defaultHeight,
+    isMaximized: false,
+  };
+}
+
+function saveWindowState(win) {
+  if (!win || win.isDestroyed()) return;
+  const isMaximized = win.isMaximized();
+  if (!isMaximized) {
+    const bounds = win.getBounds();
+    saveSettings({
+      windowState: {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        isMaximized: false,
+      },
+    });
+  } else {
+    const current = loadSettings().windowState || {};
+    saveSettings({
+      windowState: {
+        ...current,
+        isMaximized: true,
+      },
+    });
+  }
+}
+
 function createMainWindow() {
+  const bounds = getInitialWindowBounds();
+
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 820,
+    width: bounds.width,
+    height: bounds.height,
+    x: bounds.x,
+    y: bounds.y,
     minWidth: 800,
     minHeight: 500,
     title: 'Pi Web',
@@ -672,6 +728,10 @@ function createMainWindow() {
       webSecurity: true,
     },
   });
+
+  if (bounds.isMaximized) {
+    mainWindow.maximize();
+  }
 
   // Block in-app navigation to anything other than our localhost origin.
   // Anything else should open in the OS browser.
@@ -692,6 +752,7 @@ function createMainWindow() {
   });
 
   mainWindow.on('close', (event) => {
+    saveWindowState(mainWindow);
     // Single source of truth for shutdown. If we've already started
     // shutting down (e.g. via before-quit), let the close proceed. If
     // not, take over and explicitly destroy the window after cleanup.
