@@ -1011,6 +1011,7 @@ function createMainWindow() {
     y: bounds.y,
     minWidth: 800,
     minHeight: 500,
+    fullscreenable: false,
     title: 'Pi Web',
     icon: getAppIcon(),
     backgroundColor: '#0b0f17',
@@ -1159,12 +1160,6 @@ function buildMenu() {
       label: 'View',
       submenu: [
         { role: 'toggleDevTools' },
-        { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
-        { type: 'separator' },
-        { role: 'togglefullscreen' },
       ],
     },
     {
@@ -1173,10 +1168,6 @@ function buildMenu() {
         {
           label: 'Check for updates…',
           click: () => triggerUpdateCheck({ manual: true }),
-        },
-        {
-          label: 'Roll back to previous kernel',
-          click: () => triggerRollback(),
         },
         {
           label: 'Open update log',
