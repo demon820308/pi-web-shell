@@ -55,6 +55,23 @@ contextBridge.exposeInMainWorld('shell', {
   },
 
   /**
+   * Get installed skills requiring API keys with masking.
+   * @returns {Promise<Array<{id: string, name: string, envKey: string, placeholder: string, hasKey: boolean, maskedValue: string, rawValue: string}>>}
+   */
+  getSkillKeys() {
+    return ipcRenderer.invoke('shell:get-skill-keys');
+  },
+
+  /**
+   * Save updated skill API keys to ~/.pi/agent/.env and restart child.
+   * @param {Record<string, string>} keys
+   * @returns {Promise<{ok: boolean, error?: string}>}
+   */
+  saveSkillKeys(keys) {
+    return ipcRenderer.invoke('shell:save-skill-keys', keys);
+  },
+
+  /**
    * Open an external URL in the OS default browser. The renderer itself is
    * sandboxed and cannot do this safely.
    * @param {string} url

@@ -123,6 +123,177 @@ let currentPreferredPort = DEFAULT_PORT;
 let currentActualPort = DEFAULT_PORT;
 
 // ---------------------------------------------------------------------------
+// Skill Keys & ~/.pi/agent/.env Management
+// ---------------------------------------------------------------------------
+
+const KNOWN_SKILL_DEFS = {
+  'tavily': { name: 'Tavily 搜索', envKey: 'TAVILY_API_KEY', placeholder: 'tvly-...' },
+  'tavily-search': { name: 'Tavily 搜索', envKey: 'TAVILY_API_KEY', placeholder: 'tvly-...' },
+  'firecrawl': { name: 'Firecrawl 爬虫', envKey: 'FIRECRAWL_API_KEY', placeholder: 'fc-...' },
+  'brave-search': { name: 'Brave 搜索', envKey: 'BRAVE_API_KEY', placeholder: 'BSA...' },
+  'github': { name: 'GitHub 工具', envKey: 'GITHUB_TOKEN', placeholder: 'ghp_...' },
+};
+
+function getAgentEnvPath() {
+  const agentDir = path.join(os.homedir(), '.pi', 'agent');
+  if (!fs.existsSync(agentDir)) {
+    fs.mkdirSync(agentDir, { recursive: true });
+  }
+  return path.join(agentDir, '.env');
+}
+
+function loadAgentEnv() {
+  const envMap = {};
+  try {
+    const envFile = getAgentEnvPath();
+    if (fs.existsSync(envFile)) {
+      const content = fs.readFileSync(envFile, 'utf8');
+      const lines = content.split(/\r?\n/);
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx > 0) {
+          const k = trimmed.slice(0, eqIdx).trim();
+          let v = trimmed.slice(eqIdx + 1).trim();
+          if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+            v = v.slice(1, -1);
+          }
+          envMap[k] = v;
+        }
+      }
+    }
+  } catch (err) {
+    if (DEBUG) console.warn('[shell] failed to read .env:', err.message);
+  }
+  return envMap;
+}
+
+function saveAgentEnv(newVars) {
+  const envFile = getAgentEnvPath();
+  const current = loadAgentEnv();
+  const merged = { ...current, ...newVars };
+
+  const lines = [
+    '# Pi Web Agent Environment Variables',
+    `# Updated on ${new Date().toISOString()}`,
+    '',
+  ];
+  for (const [k, v] of Object.entries(merged)) {
+    if (v !== undefined && v !== null && v !== '') {
+      lines.push(`${k}=${v}`);
+    }
+  }
+  fs.writeFileSync(envFile, lines.join('\n') + '\n', 'utf8');
+}
+
+function maskApiKey(val) {
+  if (!val) return '';
+  if (val.length <= 8) return '****';
+  const start = val.slice(0, Math.min(6, Math.floor(val.length / 3)));
+  const end = val.slice(-4);
+  const maskLen = Math.max(4, val.length - start.length - end.length);
+  return `${start}${'*'.repeat(Math.min(maskLen, 16))}${end}`;
+}
+
+function getInstalledSkillKeys() {
+  const skillsDir = path.join(os.homedir(), '.pi', 'agent', 'skills');
+  const agentEnv = loadAgentEnv();
+  const detected = [];
+  const seenEnvKeys = new Set();
+
+  if (fs.existsSync(skillsDir)) {
+    try {
+      const entries = fs.readdirSync(skillsDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const skillName = entry.name.toLowerCase();
+
+        // 1. Known mapping
+        if (KNOWN_SKILL_DEFS[skillName]) {
+          const def = KNOWN_SKILL_DEFS[skillName];
+          if (!seenEnvKeys.has(def.envKey)) {
+            seenEnvKeys.add(def.envKey);
+            const rawVal = agentEnv[def.envKey] || process.env[def.envKey] || '';
+            detected.push({
+              id: skillName,
+              name: def.name,
+              envKey: def.envKey,
+              placeholder: def.placeholder,
+              hasKey: Boolean(rawVal),
+              rawValue: rawVal,
+              maskedValue: maskApiKey(rawVal),
+            });
+          }
+          continue;
+        }
+
+        // 2. Scan SKILL.md for referenced keys
+        const skillMd = path.join(skillsDir, entry.name, 'SKILL.md');
+        if (fs.existsSync(skillMd)) {
+          try {
+            const content = fs.readFileSync(skillMd, 'utf8');
+            const matches = content.match(/[A-Z0-9_]+_(?:API_KEY|TOKEN|SECRET)/g);
+            if (matches) {
+              for (const envKey of new Set(matches)) {
+                if (!seenEnvKeys.has(envKey)) {
+                  seenEnvKeys.add(envKey);
+                  const rawVal = agentEnv[envKey] || process.env[envKey] || '';
+                  detected.push({
+                    id: `${skillName}-${envKey}`,
+                    name: entry.name,
+                    envKey: envKey,
+                    placeholder: `请输入 ${envKey}`,
+                    hasKey: Boolean(rawVal),
+                    rawValue: rawVal,
+                    maskedValue: maskApiKey(rawVal),
+                  });
+                }
+              }
+            }
+          } catch {}
+        }
+      }
+    } catch (err) {
+      if (DEBUG) console.warn('[shell] failed to scan skills:', err.message);
+    }
+  }
+
+  return detected;
+}
+
+let skillKeysWindow = null;
+
+function openSkillKeysSettings() {
+  if (skillKeysWindow && !skillKeysWindow.isDestroyed()) {
+    skillKeysWindow.focus();
+    return;
+  }
+  skillKeysWindow = new BrowserWindow({
+    width: 520,
+    height: 440,
+    resizable: true,
+    minWidth: 460,
+    minHeight: 360,
+    parent: mainWindow || undefined,
+    modal: mainWindow ? true : false,
+    title: '技能密钥设置',
+    backgroundColor: '#0b0f17',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  skillKeysWindow.setMenuBarVisibility(false);
+  skillKeysWindow.loadFile(path.join(__dirname, 'renderer', 'skill-keys.html'));
+  skillKeysWindow.on('closed', () => {
+    skillKeysWindow = null;
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Logging Management (Local file logger for troubleshooting)
 // ---------------------------------------------------------------------------
 
@@ -211,6 +382,10 @@ function createTray() {
     {
       label: '重启服务',
       click: () => restartChildProcess(),
+    },
+    {
+      label: '技能密钥设置',
+      click: () => openSkillKeysSettings(),
     },
     { type: 'separator' },
     {
@@ -454,8 +629,10 @@ class PiWebProcess {
     const port = String(portOverride || currentActualPort || DEFAULT_PORT);
     const hostname = process.env.PI_WEB_HOSTNAME || DEFAULT_HOSTNAME;
 
+    const agentEnv = loadAgentEnv();
     const env = {
       ...process.env,
+      ...agentEnv,
       PI_WEB_NO_OPEN: '1', // We open our own window; suppress the default browser.
       PI_WEB_HOSTNAME: hostname,
     };
@@ -950,6 +1127,10 @@ function buildMenu() {
           click: () => openPortSettings(),
         },
         {
+          label: '技能密钥设置 (Skill Keys)...',
+          click: () => openSkillKeysSettings(),
+        },
+        {
           label: '开机自动启动 (Launch at Startup)',
           type: 'checkbox',
           checked: isAutoStartEnabled(),
@@ -1220,6 +1401,29 @@ ipcMain.handle('shell:open-external', (_event, url) => {
   }
   return { ok: false };
 });
+
+ipcMain.handle('shell:get-skill-keys', () => {
+  return getInstalledSkillKeys();
+});
+
+ipcMain.handle('shell:save-skill-keys', async (_event, keys) => {
+  if (keys && typeof keys === 'object') {
+    saveAgentEnv(keys);
+    // Update active process.env as well
+    for (const [k, v] of Object.entries(keys)) {
+      if (v) {
+        process.env[k] = v;
+      } else {
+        delete process.env[k];
+      }
+    }
+    // Restart child process so agent picks up new env immediately
+    await restartChildProcess();
+    return { ok: true };
+  }
+  return { ok: false, error: '无效的密钥数据' };
+});
+
 
 // ---------------------------------------------------------------------------
 // Update IPC

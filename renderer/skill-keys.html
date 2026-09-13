@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';"
+    />
+    <title>技能密钥设置</title>
+    <style>
+      :root {
+        --bg: #0b0f17;
+        --bg-card: #141b27;
+        --fg: #e6edf3;
+        --fg-dim: #8b95a5;
+        --accent: #388bfd;
+        --accent-hover: #58a6ff;
+        --border: #212c3d;
+        --error: #f85149;
+        --success: #3fb950;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 20px;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 13px;
+        user-select: none;
+      }
+      h2 {
+        margin: 0 0 6px;
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .desc {
+        margin: 0 0 16px;
+        color: var(--fg-dim);
+        line-height: 1.4;
+      }
+      .skill-list {
+        max-height: 280px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .skill-item {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px;
+      }
+      .skill-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .skill-name {
+        font-weight: 600;
+        font-size: 13px;
+      }
+      .skill-env-badge {
+        font-size: 11px;
+        color: var(--fg-dim);
+        font-family: Consolas, monospace;
+        background: rgba(255, 255, 255, 0.05);
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+      .skill-status {
+        font-size: 11px;
+        margin-left: 8px;
+      }
+      .skill-status.active { color: var(--success); }
+      .skill-status.empty { color: var(--fg-dim); }
+      .input-wrap {
+        display: flex;
+        gap: 6px;
+        position: relative;
+      }
+      input[type="text"] {
+        flex: 1;
+        padding: 8px 10px;
+        background: #080c13;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--fg);
+        font-size: 13px;
+        font-family: Consolas, monospace;
+        outline: none;
+      }
+      input[type="text"]:focus {
+        border-color: var(--accent);
+      }
+      button.eye-btn {
+        background: #080c13;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--fg-dim);
+        padding: 0 10px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      button.eye-btn:hover {
+        color: var(--fg);
+        border-color: var(--accent);
+      }
+      .empty-state {
+        text-align: center;
+        padding: 30px 16px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--fg-dim);
+        line-height: 1.5;
+      }
+      .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      button.action-btn {
+        padding: 7px 16px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid var(--border);
+      }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      button.primary:hover {
+        background: var(--accent-hover);
+      }
+      button.secondary {
+        background: transparent;
+        color: var(--fg);
+      }
+      button.secondary:hover {
+        background: var(--bg-card);
+      }
+      .status-msg {
+        font-size: 12px;
+        color: var(--error);
+        margin-top: 8px;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>技能密钥设置 (Skill Keys)</h2>
+    <p class="desc">
+      动态检测已安装技能。密钥统一保存在 <code>~/.pi/agent/.env</code>，随内核更新永久保留。
+    </p>
+
+    <div class="skill-list" id="skill-list">
+      <div class="empty-state">正在扫描已安装技能...</div>
+    </div>
+
+    <div class="status-msg" id="status-msg"></div>
+
+    <div class="actions">
+      <button class="action-btn secondary" id="cancel-btn">取消</button>
+      <button class="action-btn primary" id="save-btn">保存并生效</button>
+    </div>
+
+    <script>
+      const skillListEl = document.getElementById('skill-list');
+      const statusMsg = document.getElementById('status-msg');
+      const cancelBtn = document.getElementById('cancel-btn');
+      const saveBtn = document.getElementById('save-btn');
+
+      let currentSkills = [];
+
+      async function loadSkills() {
+        if (!window.shell || !window.shell.getSkillKeys) return;
+        try {
+          currentSkills = await window.shell.getSkillKeys();
+          renderList();
+        } catch (err) {
+          skillListEl.innerHTML = `<div class="empty-state" style="color:var(--error);">读取技能失败: ${err.message}</div>`;
+        }
+      }
+
+      function renderList() {
+        if (!currentSkills || currentSkills.length === 0) {
+          skillListEl.innerHTML = `
+            <div class="empty-state">
+              当前未检测到需要配置 API Key 的技能。<br />
+              （当你在 <code>~/.pi/agent/skills/</code> 中放入如 Tavily 或 Firecrawl 等技能时，此处将自动呈现。）
+            </div>
+          `;
+          saveBtn.style.display = 'none';
+          return;
+        }
+
+        saveBtn.style.display = 'block';
+        skillListEl.innerHTML = '';
+
+        currentSkills.forEach((skill, idx) => {
+          const item = document.createElement('div');
+          item.className = 'skill-item';
+
+          const hasKey = Boolean(skill.hasKey);
+          const statusText = hasKey ? `● 已配置 (尾号 ${skill.rawValue.slice(-4)})` : '○ 未配置';
+          const statusClass = hasKey ? 'active' : 'empty';
+
+          item.innerHTML = `
+            <div class="skill-header">
+              <div>
+                <span class="skill-name">${escapeHtml(skill.name)}</span>
+                <span class="skill-env-badge">${escapeHtml(skill.envKey)}</span>
+              </div>
+              <span class="skill-status ${statusClass}">${statusText}</span>
+            </div>
+            <div class="input-wrap">
+              <input
+                type="text"
+                id="input-${idx}"
+                placeholder="${escapeHtml(skill.placeholder || '请输入 API Key')}"
+                value="${escapeHtml(skill.maskedValue || '')}"
+                data-env="${escapeHtml(skill.envKey)}"
+                data-masked="true"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button type="button" class="eye-btn" id="eye-${idx}" title="切换明文/掩码">👁️</button>
+            </div>
+          `;
+
+          skillListEl.appendChild(item);
+
+          const inputEl = item.querySelector(`#input-${idx}`);
+          const eyeBtn = item.querySelector(`#eye-${idx}`);
+
+          eyeBtn.addEventListener('click', () => {
+            const isMasked = inputEl.getAttribute('data-masked') === 'true';
+            if (isMasked) {
+              inputEl.value = skill.rawValue || '';
+              inputEl.setAttribute('data-masked', 'false');
+            } else {
+              inputEl.value = skill.maskedValue || '';
+              inputEl.setAttribute('data-masked', 'true');
+            }
+          });
+
+          inputEl.addEventListener('focus', () => {
+            // If focused and value is masked, select all so user can paste to replace easily
+            if (inputEl.getAttribute('data-masked') === 'true') {
+              inputEl.select();
+            }
+          });
+
+          inputEl.addEventListener('input', () => {
+            // Once user modifies text, mark it as raw text
+            inputEl.setAttribute('data-masked', 'false');
+          });
+        });
+      }
+
+      function escapeHtml(str) {
+        return (str || '').replace(/[&<>"']/g, (m) => ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;',
+        }[m]));
+      }
+
+      cancelBtn.addEventListener('click', () => {
+        window.close();
+      });
+
+      saveBtn.addEventListener('click', async () => {
+        statusMsg.style.display = 'none';
+        saveBtn.disabled = true;
+        saveBtn.textContent = '正在保存并重启服务...';
+
+        const payload = {};
+        currentSkills.forEach((skill, idx) => {
+          const inputEl = document.getElementById(`input-${idx}`);
+          if (!inputEl) return;
+          const val = inputEl.value.trim();
+          const isMasked = inputEl.getAttribute('data-masked') === 'true';
+
+          // If unchanged masked value, retain existing raw value
+          if (isMasked && val === skill.maskedValue) {
+            payload[skill.envKey] = skill.rawValue || '';
+          } else {
+            payload[skill.envKey] = val;
+          }
+        });
+
+        try {
+          const res = await window.shell.saveSkillKeys(payload);
+          if (res && res.ok) {
+            window.close();
+          } else {
+            statusMsg.textContent = (res && res.error) ? res.error : '保存失败';
+            statusMsg.style.display = 'block';
+            saveBtn.disabled = false;
+            saveBtn.textContent = '保存并生效';
+          }
+        } catch (err) {
+          statusMsg.textContent = err.message || '操作失败';
+          statusMsg.style.display = 'block';
+          saveBtn.disabled = false;
+          saveBtn.textContent = '保存并生效';
+        }
+      });
+
+      loadSkills();
+    </script>
+  </body>
+</html>
