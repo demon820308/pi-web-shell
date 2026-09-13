@@ -31,7 +31,7 @@
  * SmartScreen re-prompts.
  */
 
-const { app, BrowserWindow, ipcMain, Menu, shell, dialog, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, shell, dialog, screen, Tray, nativeImage } = require('electron');
 const { spawn, execSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -121,6 +121,123 @@ function getPreferredPort() {
 
 let currentPreferredPort = DEFAULT_PORT;
 let currentActualPort = DEFAULT_PORT;
+
+// ---------------------------------------------------------------------------
+// Logging Management (Local file logger for troubleshooting)
+// ---------------------------------------------------------------------------
+
+function getLogFilePath() {
+  const logDir = path.join(app.getPath('userData'), 'logs');
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+  }
+  return path.join(logDir, 'pi-web.log');
+}
+
+let logStream = null;
+function writeLog(prefix, text) {
+  try {
+    if (!logStream) {
+      const logFile = getLogFilePath();
+      logStream = fs.createWriteStream(logFile, { flags: 'a', encoding: 'utf8' });
+    }
+    const timestamp = new Date().toISOString();
+    logStream.write(`[${timestamp}] [${prefix}] ${text}\n`);
+  } catch (err) {
+    // Ignore logging errors
+  }
+}
+
+function openLogFile() {
+  const logPath = getLogFilePath();
+  if (!fs.existsSync(logPath)) {
+    fs.writeFileSync(logPath, `--- Pi Web Log Initialized at ${new Date().toISOString()} ---\n`);
+  }
+  shell.openPath(logPath);
+}
+
+function openLogFolder() {
+  const logDir = path.dirname(getLogFilePath());
+  shell.openPath(logDir);
+}
+
+// ---------------------------------------------------------------------------
+// Startup & Tray Management
+// ---------------------------------------------------------------------------
+
+let tray = null;
+let isQuitting = false;
+
+function isAutoStartEnabled() {
+  const settings = loadSettings();
+  if (typeof settings.openAtLogin === 'boolean') {
+    return settings.openAtLogin;
+  }
+  return app.getLoginItemSettings().openAtLogin;
+}
+
+function setAutoStart(enable) {
+  app.setLoginItemSettings({
+    openAtLogin: enable,
+    path: process.execPath,
+  });
+  saveSettings({ openAtLogin: enable });
+}
+
+function getAppIcon() {
+  const iconPath = path.join(__dirname, 'assets', 'icon.png');
+  if (fs.existsSync(iconPath)) {
+    return nativeImage.createFromPath(iconPath);
+  }
+  return nativeImage.createEmpty();
+}
+
+function createTray() {
+  if (tray) return;
+  const icon = getAppIcon();
+  tray = new Tray(icon);
+  tray.setToolTip('Pi Web');
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '显示主窗口',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      },
+    },
+    {
+      label: '重启服务',
+      click: () => restartChildProcess(),
+    },
+    { type: 'separator' },
+    {
+      label: '查看运行日志',
+      click: () => openLogFile(),
+    },
+    { type: 'separator' },
+    {
+      label: '彻底退出',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
+  tray.on('double-click', () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.focus();
+      } else {
+        mainWindow.show();
+      }
+    }
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Resource path resolution
@@ -389,6 +506,7 @@ class PiWebProcess {
     this.child.stdout.on('data', (chunk) => {
       const text = chunk.toString();
       this.stdoutBuffer += text;
+      writeLog('stdout', text.trimEnd());
       if (DEBUG) process.stdout.write(`[pi-web] ${text}`);
       if (!this.resolved && /Ready/i.test(this.stdoutBuffer)) {
         this.resolved = true;
@@ -398,6 +516,7 @@ class PiWebProcess {
 
     this.child.stderr.on('data', (chunk) => {
       const text = chunk.toString();
+      writeLog('stderr', text.trimEnd());
       if (DEBUG) process.stderr.write(`[pi-web:err] ${text}`);
       // Surface only the last 2 KB to the UI to avoid memory bloat.
       this.emit({ kind: 'stderr', text: text.slice(-2048) });
@@ -716,6 +835,7 @@ function createMainWindow() {
     minWidth: 800,
     minHeight: 500,
     title: 'Pi Web',
+    icon: getAppIcon(),
     backgroundColor: '#0b0f17',
     show: false, // Show only once we have real content (or an error).
     webPreferences: {
@@ -753,6 +873,14 @@ function createMainWindow() {
 
   mainWindow.on('close', (event) => {
     saveWindowState(mainWindow);
+
+    // Minimize to tray unless explicitly quitting
+    if (!isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+      return;
+    }
+
     // Single source of truth for shutdown. If we've already started
     // shutting down (e.g. via before-quit), let the close proceed. If
     // not, take over and explicitly destroy the window after cleanup.
@@ -821,6 +949,14 @@ function buildMenu() {
           label: '设置服务端口 (Port)...',
           click: () => openPortSettings(),
         },
+        {
+          label: '开机自动启动 (Launch at Startup)',
+          type: 'checkbox',
+          checked: isAutoStartEnabled(),
+          click: (item) => {
+            setAutoStart(item.checked);
+          },
+        },
         { type: 'separator' },
         {
           label: 'Reload',
@@ -828,7 +964,14 @@ function buildMenu() {
           click: () => mainWindow?.webContents.reload(),
         },
         { type: 'separator' },
-        isMac ? { role: 'close' } : { role: 'quit' },
+        {
+          label: '彻底退出 (Quit)',
+          accelerator: isMac ? 'Cmd+Q' : 'CmdOrCtrl+Q',
+          click: () => {
+            isQuitting = true;
+            app.quit();
+          },
+        },
       ],
     },
     {
@@ -885,8 +1028,17 @@ function buildMenu() {
             });
           },
         },
+        { type: 'separator' },
         {
-          label: 'Open Data Folder',
+          label: '查看运行日志 (Open Log File)',
+          click: () => openLogFile(),
+        },
+        {
+          label: '打开日志文件夹 (Open Logs Folder)',
+          click: () => openLogFolder(),
+        },
+        {
+          label: '打开数据文件夹 (Open Data Folder)',
           click: () => shell.openPath(path.join(os.homedir(), '.pi', 'agent')),
         },
       ],
@@ -926,6 +1078,7 @@ function pushStateToRenderer(kind, payload) {
 
 app.on('second-instance', () => {
   if (mainWindow) {
+    if (!mainWindow.isVisible()) mainWindow.show();
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
   }
@@ -955,6 +1108,7 @@ app.whenReady().then(async () => {
   await updater.init();
 
   createMainWindow();
+  createTray();
   mainWindow.once('ready-to-show', () => mainWindow.show());
   // Push initial update state so the renderer can render the correct banner.
   pushUpdateStateToRenderer();
@@ -1009,11 +1163,14 @@ function scheduleUpdateCheck(delayMs = 0) {
 }
 
 app.on('window-all-closed', () => {
-  // macOS keeps the app running with no windows; everywhere else, quit.
-  if (process.platform !== 'darwin') app.quit();
+  if (isQuitting || process.platform !== 'darwin') {
+    // If not quitting, the window was hidden to tray, so keep process alive.
+    if (isQuitting) app.quit();
+  }
 });
 
 app.on('before-quit', (event) => {
+  isQuitting = true;
   // If the close handler already started shutdown, let the quit proceed.
   // Otherwise, take over: prevent the quit, run cleanup, then exit hard.
   if (isShuttingDown) return;
