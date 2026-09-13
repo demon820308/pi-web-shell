@@ -1,0 +1,107 @@
+{
+  "name": "pi-web-shell",
+  "version": "0.2.0",
+  "description": "Desktop shell wrapper for @agegr/pi-web. Embeds Node.js + pi-web into a standalone EXE.",
+  "private": true,
+  "main": "main.js",
+  "author": {
+    "name": "Pi Web Shell",
+    "email": "noreply@example.com"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --enable-logging",
+    "fetch:node": "node scripts/fetch-node.js",
+    "stage:pi-web": "node scripts/stage-pi-web.js",
+    "stage": "npm run fetch:node && npm run stage:pi-web",
+    "build:dir": "npm run stage && electron-builder --win --x64 --dir",
+    "build": "npm run stage && electron-builder --win --x64",
+    "build:zip": "npm run stage && electron-builder --win zip --x64",
+    "build:installer": "npm run stage && electron-builder --win nsis --x64",
+    "release:kernel": "node scripts/release.js",
+    "release:kernel:upload": "node scripts/release.js --upload"
+  },
+  "dependencies": {
+    "semver": "^7.6.0",
+    "tar": "^7.5.22"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.pi-web.shell",
+    "productName": "Pi Web",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "lib/**/*",
+      "renderer/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "npmRebuild": false,
+    "buildDependenciesFromSource": false,
+    "extraResources": [
+      {
+        "from": "resources/node",
+        "to": "node",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "resources/pi-web",
+        "to": "pi-web",
+        "filter": [
+          "**/*",
+          "!**/node_modules/.cache/**",
+          "!**/node_modules/.bin/**",
+          "!**/.npm/**",
+          "!**/.next/cache/**",
+          "!**/.next/dev/**",
+          "!**/.next/**/_*.js",
+          "!**/*.log",
+          "!**/*.md",
+          "!**/*.markdown",
+          "!**/.DS_Store"
+        ]
+      }
+    ],
+    "asar": true,
+    "asarUnpack": [],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Pi Web",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "zip": {
+      "artifactName": "${productName}-Portable-${version}.${ext}"
+    }
+  }
+}

@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';"
+    />
+    <title>设置服务端口</title>
+    <style>
+      :root {
+        --bg: #0b0f17;
+        --bg-card: #141b27;
+        --fg: #e6edf3;
+        --fg-dim: #8b95a5;
+        --accent: #388bfd;
+        --accent-hover: #58a6ff;
+        --border: #212c3d;
+        --error: #f85149;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 20px;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-size: 13px;
+        user-select: none;
+      }
+      h2 {
+        margin: 0 0 8px;
+        font-size: 16px;
+        font-weight: 600;
+      }
+      p {
+        margin: 0 0 14px;
+        color: var(--fg-dim);
+        line-height: 1.4;
+      }
+      .form-group {
+        margin-bottom: 14px;
+      }
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 500;
+      }
+      input[type="number"] {
+        width: 100%;
+        padding: 8px 10px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--fg);
+        font-size: 14px;
+        outline: none;
+      }
+      input[type="number"]:focus {
+        border-color: var(--accent);
+      }
+      .hint {
+        font-size: 12px;
+        color: var(--fg-dim);
+        margin-top: 6px;
+      }
+      .actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 18px;
+      }
+      button {
+        padding: 6px 14px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid var(--border);
+      }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      button.primary:hover {
+        background: var(--accent-hover);
+      }
+      button.secondary {
+        background: transparent;
+        color: var(--fg);
+      }
+      button.secondary:hover {
+        background: var(--bg-card);
+      }
+      .status {
+        font-size: 12px;
+        color: var(--error);
+        margin-top: 8px;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>首选服务端口</h2>
+    <p>设置 pi-web 启动的首选端口。若被占用，外壳将自动 +1 探测空闲端口运行，不影响任何核心数据。</p>
+    <div class="form-group">
+      <label for="port-input">端口号 (1024 - 65535)</label>
+      <input id="port-input" type="number" min="1024" max="65535" step="1" value="30141" />
+      <div class="hint" id="current-info">当前实际运行端口: 正在获取...</div>
+      <div class="status" id="status-msg"></div>
+    </div>
+    <div class="actions">
+      <button class="secondary" id="cancel-btn">取消</button>
+      <button class="primary" id="save-btn">保存并重启</button>
+    </div>
+
+    <script>
+      const portInput = document.getElementById('port-input');
+      const currentInfo = document.getElementById('current-info');
+      const statusMsg = document.getElementById('status-msg');
+      const cancelBtn = document.getElementById('cancel-btn');
+      const saveBtn = document.getElementById('save-btn');
+
+      if (window.shell && window.shell.getPortConfig) {
+        window.shell.getPortConfig().then((cfg) => {
+          if (cfg) {
+            portInput.value = cfg.preferredPort || 30141;
+            currentInfo.textContent = `当前首选端口: ${cfg.preferredPort} | 当前实际运行: ${cfg.actualPort}`;
+          }
+        });
+      }
+
+      cancelBtn.addEventListener('click', () => {
+        window.close();
+      });
+
+      saveBtn.addEventListener('click', async () => {
+        const val = parseInt(portInput.value, 10);
+        if (isNaN(val) || val < 1024 || val > 65535) {
+          statusMsg.textContent = '请输入有效的端口号 (1024 ~ 65535)';
+          statusMsg.style.display = 'block';
+          return;
+        }
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = '正在保存并重启...';
+        statusMsg.style.display = 'none';
+
+        try {
+          const res = await window.shell.setPreferredPort(val);
+          if (res && res.ok) {
+            window.close();
+          } else {
+            statusMsg.textContent = (res && res.error) ? res.error : '保存失败';
+            statusMsg.style.display = 'block';
+            saveBtn.disabled = false;
+            saveBtn.textContent = '保存并重启';
+          }
+        } catch (err) {
+          statusMsg.textContent = err.message || '操作失败';
+          statusMsg.style.display = 'block';
+          saveBtn.disabled = false;
+          saveBtn.textContent = '保存并重启';
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,240 @@
+/* Loading + error screens. Once pi-web is ready, this DOM is replaced by
+   the localhost page and these styles no longer apply. */
+
+:root {
+  --bg: #0b0f17;
+  --bg-2: #121826;
+  --fg: #e6edf3;
+  --fg-dim: #8b95a5;
+  --accent: #7cc4ff;
+  --error: #ff8585;
+  --border: #1f2a3c;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+main#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.screen {
+  max-width: 520px;
+  text-align: center;
+}
+
+.screen[hidden] { display: none; }
+
+.logo {
+  color: var(--accent);
+  margin-bottom: 16px;
+  display: inline-flex;
+}
+
+.logo.error { color: var(--error); }
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.hint {
+  color: var(--fg-dim);
+  margin: 0 0 24px;
+  line-height: 1.5;
+}
+
+code {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.92em;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+}
+
+.error-message {
+  color: var(--error);
+  margin: 0 0 24px;
+  line-height: 1.5;
+  background: rgba(255, 133, 133, 0.08);
+  border: 1px solid rgba(255, 133, 133, 0.2);
+  padding: 12px 14px;
+  border-radius: 8px;
+  text-align: left;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 13px;
+  word-break: break-word;
+}
+
+.troubleshooting {
+  text-align: left;
+  color: var(--fg-dim);
+  line-height: 1.7;
+  padding-left: 24px;
+  margin: 0 0 24px;
+}
+
+.troubleshooting li { margin-bottom: 4px; }
+
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+button {
+  background: var(--accent);
+  color: #06121f;
+  border: 0;
+  padding: 9px 18px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+button:hover { filter: brightness(1.08); }
+
+button.secondary {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+
+.progress {
+  width: 220px;
+  height: 3px;
+  background: var(--bg-2);
+  border-radius: 2px;
+  margin: 16px auto 0;
+  overflow: hidden;
+}
+
+.progress span {
+  display: block;
+  height: 100%;
+  width: 40%;
+  background: var(--accent);
+  border-radius: 2px;
+  animation: slide 1.4s ease-in-out infinite;
+}
+
+@keyframes slide {
+  0%   { transform: translateX(-100%); }
+  50%  { transform: translateX(150%); }
+  100% { transform: translateX(350%); }
+}
+
+/* =========================================================================
+   Update banner
+   ========================================================================= */
+
+.update-banner {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 320px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+  z-index: 100;
+  animation: banner-in 0.25s ease-out;
+}
+
+.update-banner[hidden] { display: none; }
+
+.update-banner-content {
+  padding: 12px 14px;
+}
+
+.update-banner-title {
+  font-weight: 600;
+  color: var(--fg);
+  margin-bottom: 4px;
+}
+
+.update-banner-detail {
+  color: var(--fg-dim);
+  line-height: 1.45;
+  margin-bottom: 8px;
+}
+
+.update-banner-progress { margin-bottom: 10px; }
+
+.update-bar {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.update-bar span {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width 0.2s ease-out;
+}
+
+.update-banner-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.update-banner button.ghost {
+  background: transparent;
+  color: var(--fg-dim);
+  border: 0;
+  padding: 4px 8px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.update-banner button.ghost:hover { color: var(--fg); }
+
+.update-banner button:not(.ghost) {
+  background: var(--accent);
+  color: #06121f;
+  border: 0;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.update-banner-error .update-banner-title { color: var(--error); }
+
+@keyframes banner-in {
+  from { transform: translateY(-12px); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}

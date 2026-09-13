@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' http://127.0.0.1:* http://localhost:*; font-src 'self' data:;"
+    />
+    <title>Pi Web</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main id="root" class="state-starting">
+      <section class="screen screen-loading" data-screen="starting">
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 64 64" width="48" height="48">
+            <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" stroke-width="3" />
+            <path d="M22 22 L42 42 M42 22 L22 42" stroke="currentColor" stroke-width="3" fill="none" />
+          </svg>
+        </div>
+        <h1>Starting Pi Web…</h1>
+        <p class="hint" id="loading-hint">
+          Booting the local server...
+        </p>
+        <div class="progress" aria-hidden="true"><span></span></div>
+      </section>
+
+      <section class="screen screen-error" data-screen="error" hidden>
+        <div class="logo error" aria-hidden="true">
+          <svg viewBox="0 0 64 64" width="48" height="48">
+            <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" stroke-width="3" />
+            <text x="32" y="42" text-anchor="middle" font-size="32" fill="currentColor">!</text>
+          </svg>
+        </div>
+        <h1>Could not start Pi Web</h1>
+        <p class="error-message" id="error-message">Unknown error.</p>
+        <ol class="troubleshooting">
+          <li>Is Node.js 22.19 or newer installed? Run <code>node --version</code> to check.</li>
+          <li>Is port 30141 free? (Close any other instance of Pi Web first.)</li>
+          <li>Try <code>npm install -g @agegr/pi-web@latest</code> in a terminal.</li>
+        </ol>
+        <div class="actions">
+          <button id="retry-btn" type="button">Retry</button>
+          <button id="docs-btn" type="button" class="secondary">View Docs</button>
+        </div>
+      </section>
+
+      <section class="screen screen-exit" data-screen="exit" hidden>
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 64 64" width="48" height="48">
+            <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" stroke-width="3" />
+          </svg>
+        </div>
+        <h1>Pi Web has stopped</h1>
+        <p class="hint" id="exit-hint">The local server has exited. You can close this window.</p>
+      </section>
+    </main>
+
+    <!-- Persistent update banner. Only visible when there is something to
+         say (available / downloading / ready). Sits at the top-right so it
+         doesn't fight with the centered loading state. -->
+    <aside id="update-banner" class="update-banner" hidden aria-live="polite">
+      <div class="update-banner-content">
+        <div class="update-banner-title" id="update-banner-title">Update available</div>
+        <div class="update-banner-detail" id="update-banner-detail"></div>
+        <div class="update-banner-progress" id="update-banner-progress" hidden>
+          <div class="update-bar"><span id="update-bar-fill"></span></div>
+        </div>
+        <div class="update-banner-actions">
+          <button id="update-banner-action" type="button" hidden></button>
+          <button id="update-banner-dismiss" type="button" class="ghost" aria-label="Dismiss">×</button>
+        </div>
+      </div>
+    </aside>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>
