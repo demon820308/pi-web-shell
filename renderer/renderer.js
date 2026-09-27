@@ -104,8 +104,14 @@ function renderBanner(state) {
     case 'available':
       title = `Update available: v${availableVersion}`;
       detail = installedVersion
-        ? `Currently running v${installedVersion}. Downloading in the background…`
-        : 'Downloading in the background…';
+        ? `Currently running v${installedVersion}.`
+        : '';
+      actionLabel = 'Download';
+      actionHandler = async () => {
+        bannerAction.disabled = true;
+        bannerAction.textContent = 'Starting…';
+        await window.shell.update.download();
+      };
       break;
     case 'downloading':
       title = `Downloading v${availableVersion}…`;

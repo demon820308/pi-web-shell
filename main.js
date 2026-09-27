@@ -635,6 +635,7 @@ class PiWebProcess {
       ...agentEnv,
       PI_WEB_NO_OPEN: '1', // We open our own window; suppress the default browser.
       PI_WEB_HOSTNAME: hostname,
+      PI_WEB_SKIP_VERSION_CHECK: '1', // Suppress upstream web npm version check
     };
 
     let command;
@@ -804,27 +805,72 @@ function pushUpdateStateToRenderer() {
   });
 }
 
-async function triggerUpdateCheck({ manual = false } = {}) {
+async function triggerUpdateCheck({ manual = false, startup = false } = {}) {
   if (!updater) return { ok: false, error: 'updater not initialized' };
+  if (process.env.PI_WEB_UPDATE_DISABLED === '1') return { ok: false, disabled: true };
+
   pushUpdateStateToRenderer();
-  const result = await updater.checkForUpdates();
-  if (manual && result.available) {
-    dialog.showMessageBox(mainWindow, {
+  let result;
+  try {
+    result = await updater.checkForUpdates();
+  } catch (err) {
+    if (manual) {
+      dialog.showMessageBox(mainWindow, {
+        type: 'error',
+        title: '检查更新失败',
+        message: '无法获取更新信息',
+        detail: err.message,
+        buttons: ['确定'],
+      });
+    }
+    return { ok: false, error: err.message };
+  }
+
+  if (result.available && (manual || startup)) {
+    const isInstaller = result.type === 'installer';
+    const message = isInstaller
+      ? `检测到 Pi Web 新版本 v${result.version}（安装包更新）`
+      : `检测到 Pi Web 内核新版本 v${result.version}`;
+    const detail = isInstaller
+      ? '发现新版桌面安装包已发布在 GitHub，是否前往下载最新安装包？'
+      : '发现新版本内核已发布，是否立即在后台下载并更新？';
+
+    const fullDetail = result.changelog
+      ? `${detail}\n\n更新说明：\n${result.changelog.slice(0, 300)}`
+      : detail;
+
+    const choice = dialog.showMessageBoxSync(mainWindow, {
       type: 'info',
-      title: 'Update available',
-      message: `Pi Web kernel ${result.version} is available.`,
-      detail: 'It will download in the background. You will be notified when it is ready to install.',
-      buttons: ['OK'],
+      title: '发现新版本 (Update Available)',
+      message,
+      detail: fullDetail,
+      buttons: isInstaller
+        ? ['前往下载 (Download)', '稍后再说 (Later)']
+        : ['立即更新 (Update Now)', '稍后再说 (Later)'],
+      defaultId: 0,
+      cancelId: 1,
     });
+
+    if (choice === 0) {
+      if (isInstaller && result.downloadUrl) {
+        shell.openExternal(result.downloadUrl);
+      } else {
+        updater.downloadUpdate().catch((err) => {
+          if (DEBUG) console.warn('[shell] update download failed:', err.message);
+        });
+      }
+    }
   } else if (manual && !result.available) {
     dialog.showMessageBox(mainWindow, {
       type: 'info',
-      title: 'No updates',
-      message: 'You are running the latest Pi Web kernel.',
+      title: '检查更新',
+      message: '当前已是最新版本',
       detail: result.reason === 'shell-too-old'
-        ? 'A newer kernel exists but requires a newer shell version.'
-        : '',
-      buttons: ['OK'],
+        ? '存在更新的内核，但需要更高版本的外壳支持。'
+        : result.reason === 'rolled-back-blacklisted'
+        ? '最新版本曾因启动异常被自动回滚，暂不重复提示。'
+        : '没有检测到新版本。',
+      buttons: ['确定'],
     });
   }
   return { ok: true, ...result };
@@ -910,6 +956,10 @@ function attachPiWebHandlers(proc) {
           mainWindow.setTitle(`Pi Web${titleSuffix}`);
           mainWindow.loadURL(event.url);
         }
+        // App is fully started: wait briefly then check for updates and prompt user if available
+        setTimeout(() => {
+          triggerUpdateCheck({ startup: true });
+        }, 1500);
         break;
       case 'error':
         stateBeforeReady = 'error';
@@ -1163,14 +1213,14 @@ function buildMenu() {
       ],
     },
     {
-      label: 'Kernel',
+      label: '更新 (Update)',
       submenu: [
         {
-          label: 'Check for updates…',
+          label: '检查更新 (Check for Updates…)',
           click: () => triggerUpdateCheck({ manual: true }),
         },
         {
-          label: 'Open update log',
+          label: '查看更新状态 (Update State)',
           click: () => {
             if (mainWindow) {
               mainWindow.webContents.send('shell:event', { kind: 'update:open-log' });
@@ -1295,9 +1345,9 @@ app.whenReady().then(async () => {
   }
   piWeb.start(currentActualPort);
 
-  // Kick off the first update check in the background. We don't await it
-  // so window paint and child spawn aren't blocked on network.
-  scheduleUpdateCheck(0);
+  // Startup check is handled when the server reaches 'ready'.
+  // Schedule subsequent periodic checks every 8 hours.
+  scheduleUpdateCheck(8 * 60 * 60 * 1000);
 });
 
 /**
@@ -1330,6 +1380,9 @@ function scheduleUpdateCheck(delayMs = 0) {
       }
     } catch (err) {
       if (DEBUG) console.warn('[shell] scheduled check failed:', err.message);
+    } finally {
+      // Re-check periodically every 8 hours while running.
+      scheduleUpdateCheck(8 * 60 * 60 * 1000);
     }
   }, delayMs);
 }

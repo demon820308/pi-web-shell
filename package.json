@@ -1,6 +1,6 @@
 {
   "name": "pi-web-shell",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Desktop shell wrapper for @agegr/pi-web. Embeds Node.js + pi-web into a standalone EXE.",
   "private": true,
   "main": "main.js",
@@ -10,6 +10,7 @@
   },
   "scripts": {
     "start": "electron .",
+    "test": "node --test test/**/*.test.js",
     "dev": "electron . --enable-logging",
     "fetch:node": "node scripts/fetch-node.js",
     "stage:pi-web": "node scripts/stage-pi-web.js",

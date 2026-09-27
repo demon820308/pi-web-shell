@@ -27,8 +27,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Windows Packages (.exe installer & .zip portable)
-        run: npm run build
+      - name: Build Windows Packages (.exe installer & .zip portable) & Kernel
+        run: |
+          npm run build
+          npm run release:kernel
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -39,6 +41,7 @@ jobs:
           path: |
             dist/*.exe
             dist/*.zip
+            dist-kernel/*
           if-no-files-found: error
 
       - name: Extract Tag Name
@@ -52,16 +55,17 @@ jobs:
             echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create or Update Draft Release
+      - name: Create or Update Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.get_tag.outputs.tag }}
           name: ${{ steps.get_tag.outputs.tag }}
-          draft: true
+          draft: false
           prerelease: false
           files: |
             dist/*.exe
             dist/*.zip
+            dist-kernel/*
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

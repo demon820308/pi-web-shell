@@ -1,7 +1,7 @@
 # pi-web-shell
 
 A lightweight **Electron** wrapper that turns [@agegr/pi-web](https://github.com/agegr/pi-web)
-into a standalone, zero-dependency desktop app on Windows / macOS / Linux.
+into a standalone, zero-dependency desktop app on Windows.
 
 ## What it does
 
@@ -12,10 +12,10 @@ into a standalone, zero-dependency desktop app on Windows / macOS / Linux.
 │  │   ├─ Resolves bundled Node + pi-web           │
 │  │   ├─ Spawns them as a child process           │
 │  │   ├─ Watches stdout for "Ready"               │
-│  │   └─ (Phase 3) Background kernel updater       │
+│  │   └─ Background kernel updater (lib/)         │
 │  └─ BrowserWindow                                │
 │      ├─ Loading screen (renderer/)               │
-│      ├─ Update banner (Phase 3)                  │
+│      ├─ Update banner                            │
 │      └─ Navigates to localhost:30141             │
 └─────────────────┬────────────────────────────────┘
                   │ child_process.spawn
@@ -24,7 +24,7 @@ into a standalone, zero-dependency desktop app on Windows / macOS / Linux.
 │  Bundled inside the EXE:                         │
 │  ├─ resources/node/v22.19.0/node.exe             │
 │  ├─ resources/pi-web/         (active kernel)     │
-│  ├─ resources/pi-web-backup/ (previous, rollback) │
+│  ├─ resources/pi-web-backup/ (previous version)   │
 │  └─ resources/pi-web-incoming/ (downloaded, swap) │
 └──────────────────────────────────────────────────┘
 ```
@@ -36,12 +36,45 @@ into a standalone, zero-dependency desktop app on Windows / macOS / Linux.
 - Upgrading pi-web is hot: the shell silently downloads a new kernel and
   prompts the user to restart.
 
-## Phase 3: Silent kernel hot-updates
+## Features
+
+- **Zero-install runtime** — Node.js v22.19.0 and pi-web's full `node_modules`
+  are bundled via electron-builder `extraResources`.
+- **Single instance** — a second launch raises the existing window instead of
+  spawning another server.
+- **Port management** — defaults to `30141`, auto-falls-back to the next free
+  port (up to +30) when busy. Configurable via *File → 设置服务端口 (Port)*;
+  the choice is persisted in `userData/settings.json`.
+- **Skill key manager** — *File → 技能密钥设置 (Skill Keys)*. Detects installed
+  skills under `~/.pi/agent/skills/` (built-in: Tavily / Firecrawl / Brave /
+  GitHub, plus any `SKILL.md` referencing `*_API_KEY`-style variables), lets you
+  enter keys with masked display, and syncs them to `~/.pi/agent/.env`, which is
+  merged into the child process environment.
+- **System tray** — show window, restart service, skill keys, view log, quit.
+  Closing the window minimizes to the tray and keeps pi-web running; use the
+  tray's "彻底退出" (or *File → 彻底退出*) to actually stop the service.
+- **Auto-start toggle** — *File → 开机自动启动 (Launch at Startup)*.
+- **File logging** — the shell appends to `userData/logs/pi-web.log`;
+  *Help → 查看运行日志* opens the file, plus "Open Logs Folder" /
+  "Open Data Folder" entries.
+- **Window state persistence** — position and size are remembered across runs.
+- **Kernel hot-update** — see below.
+
+## Kernel hot-updates
 
 Only the **pi-web kernel** is updated automatically, not the shell or Node.js.
 Update flow:
 
-1. On startup, the shell fetches `kernel-manifest.json` (URL configurable).
+1. On startup (and via *Kernel → Check for updates…*), the shell fetches an
+   update manifest. Two formats are supported:
+   - **GitHub Releases API** (default):
+     `https://api.github.com/repos/agegr/pi-web/releases/latest` — parses the
+     release JSON for a kernel tarball asset; SHA-256 is verified when a
+     `<tarball>.sha256` sidecar asset exists. A 404 means "no release yet" and
+     stays silent.
+   - **Custom manifest JSON** via `PI_WEB_UPDATE_MANIFEST_URL` — strict schema
+     (`schemaVersion=1`, `kernel.{version,tarball,sha256,size}`) with mandatory
+     SHA-256 verification.
 2. If the manifest's version is newer than the installed one, the shell
    **silently downloads** the new kernel tarball in the background.
 3. While downloading, the user sees a small banner in the corner with progress.
@@ -49,11 +82,12 @@ Update flow:
 5. Clicking it: stops the child process → atomic-renames
    `pi-web/` → `pi-web-backup/` and `pi-web-incoming/` → `pi-web/`
    → restarts the child against the new kernel.
-6. If the new kernel crashes on startup 3 times in a row, the shell
-   **auto-rolls back** to the previous version.
+6. If the new kernel fails to start 3 times in a row, the shell
+   **auto-rolls back** to the previous version (`STARTUP_FAILURE_THRESHOLD = 3`).
 
 Update payload is ~220 MB compressed (vs ~300 MB for a full EXE). User
-never sees a browser redirect or a download dialog.
+never sees a browser redirect or a download dialog. Update state lives in
+`userData/update-state.json`; *Kernel → Open update log* shows its history.
 
 ## Running from source (dev mode)
 
@@ -62,56 +96,78 @@ cd pi-web-shell
 npm install
 npm run stage          # one-time: download Node + install pi-web into resources/
 npm start              # launch shell, spawns bundled pi-web
+npm run dev            # same, with --enable-logging (verbose child logs)
 ```
 
 For dev with a system Node and globally installed pi-web:
 ```bash
 npm install -g @agegr/pi-web@latest
-npm start              # skips resources/; uses your system Node + global pi-web
+npm start              # falls back to system Node + global pi-web when resources/ is absent
 ```
+
+Resolution order for the pi-web binary and Node:
+1. Bundled `resources/` (primary path in packaged builds)
+2. Env overrides (`PI_WEB_BIN` / `PI_WEB_NODE`) for dev/testing
+3. System Node.js + global pi-web (dev convenience)
+4. `npx` fallback (downloads `@latest` on first run)
 
 ## Building an EXE (Windows)
 
 ```bash
-npm run build
+npm run build              # NSIS installer + zip
+npm run build:installer    # NSIS installer only
+npm run build:zip          # zip only
+npm run build:dir          # unpacked win-unpacked/ directory (for testing)
 ```
 
 Pipeline: `fetch-node.js` → `stage-pi-web.js` → `electron-builder`.
 
 Outputs in `dist/`:
-- `Pi Web-0.3.0-x64.exe` — NSIS installer (per-user, no admin needed).
-- `Pi Web-0.3.0-Portable.exe` — single-file portable EXE.
+- `Pi Web-Setup-<version>.exe` — NSIS installer (per-user, no admin needed).
+- `Pi Web-<version>-x64.zip` — portable zip.
+
+CI (`.github/workflows/build.yml`) runs `npm run build` on every push to `main`
+and on `v*` tags, uploads the artifacts, and creates a **draft** GitHub release
+for manual publishing.
 
 ## Releasing a kernel update
 
 ```bash
-# Bump pi-web version in scripts/stage-pi-web.js, then:
+# Bump PI_WEB_VERSION in scripts/stage-pi-web.js, then:
 npm run stage
 npm run release:kernel             # builds tarball + manifest in dist-kernel/
-npm run release:kernel -- --upload # also uploads via gh CLI
+npm run release:kernel:upload      # also uploads via gh CLI
 ```
 
-The release script:
+The release script (`scripts/release.js`):
 1. Walks `resources/pi-web/` and excludes dev/test/source-map/docs.
 2. `tar -czf`s the result into a versioned tarball (~220 MB).
 3. Computes SHA-256.
 4. Emits `kernel-manifest.json` pointing at the tarball.
-5. Optionally `gh release create`s both files.
+5. Optionally `gh release create`s both files (tag `pi-web-kernel-<version>`).
+
+Options: `--version V`, `--output DIR`, `--shell-version V`,
+`--manifest-url URL`, `--upload`.
 
 ## Build & release pipeline
 
 | Script                          | What it does                                          |
 |---------------------------------|-------------------------------------------------------|
+| `npm start` / `npm run dev`     | Launch the shell from source                          |
 | `npm run fetch:node`            | Download Node.js portable to `resources/node/v22.19.0/` |
 | `npm run stage:pi-web`          | Install `@agegr/pi-web@<ver>` to `resources/pi-web/`  |
 | `npm run stage`                 | Both of the above                                     |
-| `npm run build`                 | Stage + electron-builder (NSIS + Portable)            |
-| `npm run build:portable`        | Stage + electron-builder (Portable only)              |
+| `npm run build`                 | Stage + electron-builder (NSIS + zip)                 |
+| `npm run build:installer`       | Stage + electron-builder (NSIS only)                  |
+| `npm run build:zip`             | Stage + electron-builder (zip only)                   |
+| `npm run build:dir`             | Stage + electron-builder (unpacked directory)         |
 | `npm run release:kernel`        | Build kernel tarball + manifest                       |
 | `npm run release:kernel:upload` | Same, then `gh release create`                        |
 
 `fetch:node` and `stage:pi-web` are **idempotent** — they skip when the
-right version is already present.
+right version is already present. Pinned versions live at the top of each
+script (`NODE_VERSION` in `fetch-node.js`, `PI_WEB_VERSION` in
+`stage-pi-web.js`).
 
 ## Configuration
 
@@ -122,8 +178,10 @@ right version is already present.
 | `PI_WEB_BIN`                  | Absolute path to a specific `pi-web.js` to spawn     |
 | `PI_WEB_NODE`                 | Absolute path to a specific `node` binary to use     |
 | `PI_WEB_PASSWORD`             | Enable HTTP Basic Auth (passed through to pi-web)    |
-| `PI_WEB_UPDATE_MANIFEST_URL`  | Override the kernel manifest URL                     |
+| `PI_WEB_UPDATE_MANIFEST_URL`  | Override the update manifest URL                     |
 | `PI_WEB_UPDATE_DISABLED=1`    | Disable automatic update checks                      |
+
+Keys from `~/.pi/agent/.env` are merged into the child environment as well.
 
 ## Project structure
 
@@ -134,10 +192,12 @@ pi-web-shell/
 ├── preload.js               # Context bridge (sandboxed renderer)
 ├── renderer/
 │   ├── index.html           # Loading + error + update banner
-│   ├── styles.css
-│   └── renderer.js
-├── lib/                     # Phase 3 — updater modules
-│   ├── manifest-client.js   # Fetch + validate kernel-manifest.json
+│   ├── port-settings.html   # Port configuration dialog
+│   ├── skill-keys.html      # Skill key manager dialog
+│   ├── renderer.js
+│   └── styles.css
+├── lib/                     # Updater modules
+│   ├── manifest-client.js   # Fetch + validate update manifest
 │   ├── update-state.js      # Persisted update state in userData/
 │   └── kernel-updater.js    # State machine: check → download → apply → rollback
 ├── scripts/
@@ -147,20 +207,16 @@ pi-web-shell/
 ├── resources/               # Gitignored, regenerated by `npm run stage`
 │   ├── node/v22.19.0/       # Bundled Node.js runtime
 │   └── pi-web/node_modules/ # Bundled pi-web + all transitive deps
-├── assets/                  # (placeholder for app icon)
+├── assets/                  # app icon source (icon.png, 192x192)
 └── build/                   # electron-builder build resources (icon.ico)
 ```
 
-## What Phase 3 still doesn't do
+## Not yet done
 
-These were deferred:
+These are still deferred:
 - Windows code signing (unsigned EXEs trigger SmartScreen warnings).
-- macOS / Linux packaging.
-- Custom application icon.
-- Window position/size persistence.
-- Tray icon + background mode.
+- macOS / Linux packaging (builds currently target Windows x64 only).
 - Differential update deltas (full kernel tarball every time).
-- Built-in log viewer (we surface errors via the banner / About dialog).
 
 ## Verified
 

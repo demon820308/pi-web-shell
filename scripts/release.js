@@ -41,7 +41,7 @@ const DEFAULT_SHELL_VERSION = (() => {
 })();
 const DEFAULT_MANIFEST_URL =
   process.env.PI_WEB_UPDATE_MANIFEST_URL ||
-  'https://github.com/agegr/pi-web-shell/releases/latest/download/kernel-manifest.json';
+  'https://github.com/demon820308/pi-web-shell/releases/latest/download/kernel-manifest.json';
 
 function parseArgs(argv) {
   const args = { output: DEFAULT_OUTPUT_DIR, upload: false, manifestUrl: DEFAULT_MANIFEST_URL };
@@ -164,7 +164,9 @@ async function buildTarball({ version, outputDir }) {
 
   const stat = await fsp.stat(tarballPath);
   const sha256 = await sha256OfFile(tarballPath);
-  return { tarballPath, tarballName, size: stat.size, sha256 };
+  const sidecarPath = `${tarballPath}.sha256`;
+  await fsp.writeFile(sidecarPath, `${sha256}  ${tarballName}\n`);
+  return { tarballPath, tarballName, sidecarPath, size: stat.size, sha256 };
 }
 
 async function buildManifest({ version, size, sha256, args }) {
@@ -185,12 +187,13 @@ async function buildManifest({ version, size, sha256, args }) {
   return { manifestPath, manifest };
 }
 
-async function maybeUpload({ version, tarballPath, manifestPath, args }) {
+async function maybeUpload({ version, tarballPath, sidecarPath, manifestPath, args }) {
   if (!args.upload) {
     console.log('[release] --upload not set. Skipping GitHub push.');
     console.log('[release] Manual upload:');
     console.log(`          gh release create pi-web-kernel-${version} \\`);
     console.log(`            "${path.relative(process.cwd(), tarballPath)}" \\`);
+    console.log(`            "${path.relative(process.cwd(), sidecarPath)}" \\`);
     console.log(`            "${path.relative(process.cwd(), manifestPath)}" \\`);
     console.log(`            --title "Pi Web Kernel ${version}" --generate-notes`);
     return;
@@ -206,7 +209,7 @@ async function maybeUpload({ version, tarballPath, manifestPath, args }) {
   const tag = `pi-web-kernel-${version}`;
   console.log(`[release] creating GitHub release ${tag}...`);
   execSync(
-    `gh release create "${tag}" "${tarballPath}" "${manifestPath}" --title "Pi Web Kernel ${version}" --generate-notes`,
+    `gh release create "${tag}" "${tarballPath}" "${sidecarPath}" "${manifestPath}" --title "Pi Web Kernel ${version}" --generate-notes`,
     { stdio: 'inherit' }
   );
   console.log('[release] uploaded.');
@@ -228,7 +231,7 @@ async function main() {
   await fsp.mkdir(args.output, { recursive: true });
 
   // 2. Build the tarball.
-  const { tarballPath, tarballName, size, sha256 } = await buildTarball({
+  const { tarballPath, tarballName, sidecarPath, size, sha256 } = await buildTarball({
     version: args.version,
     outputDir: args.output,
   });
@@ -241,7 +244,7 @@ async function main() {
   console.log(JSON.stringify(manifest, null, 2));
 
   // 4. Upload (optional).
-  await maybeUpload({ version: args.version, tarballPath, manifestPath, args });
+  await maybeUpload({ version: args.version, tarballPath, sidecarPath, manifestPath, args });
 
   console.log('[release] done.');
 }
