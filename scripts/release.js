@@ -25,6 +25,7 @@ const fsp = require('fs/promises');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn, execSync } = require('child_process');
+const tar = require('tar');
 
 const ROOT = path.join(__dirname, '..');
 const STAGING_DIR = path.join(ROOT, 'resources', 'pi-web');
@@ -133,34 +134,20 @@ async function buildTarball({ version, outputDir }) {
   const tarballName = `pi-web-kernel-${version}.tar.gz`;
   const tarballPath = path.join(outputDir, tarballName);
 
-  // Collect the file list ourselves so we can filter. We can't use
-  // tar.create with a filter callback because the streaming gzip wrapper
-  // makes debugging hard if something goes wrong; we'd rather just have a
-  // deterministic list.
   console.log('[release] walking staging directory...');
   const allFiles = await walk(STAGING_DIR);
   const files = allFiles.filter((p) => !shouldExclude(p)).map((p) => p.replace(/\\/g, '/'));
   console.log(`[release] ${files.length} files (excluded ${allFiles.length - files.length})`);
 
-  // Use the platform's tar to do the compression. On Windows this is
-  // tar.exe (built into Windows 10+), on macOS / Linux it's GNU tar.
-  const manifest = path.join(outputDir, `files-${version}.txt`);
-  await fsp.writeFile(manifest, files.join('\n'));
-
   console.log(`[release] creating ${tarballName}...`);
-  // tar --files-from expects NUL-separated paths on Windows for safety,
-  // but newlines work fine here because we control the paths.
-  // We use `tar -C STAGING_DIR -T manifest -czf tarball` so the entries
-  // are relative to STAGING_DIR.
-  // --force-local prevents GNU tar on Windows from interpreting paths
-  // like "D:\..." as remote host:path specs (the colon triggers it).
-  const tarCmd = process.platform === 'win32' ? 'tar.exe' : 'tar';
-  const toFwd = (p) => String(p).replace(/\\/g, '/');
-  execSync(
-    `${tarCmd} --force-local -C "${toFwd(STAGING_DIR)}" -T "${toFwd(manifest)}" -czf "${toFwd(tarballPath)}"`,
-    { stdio: 'inherit' }
+  await tar.create(
+    {
+      gzip: true,
+      file: tarballPath,
+      cwd: STAGING_DIR,
+    },
+    files
   );
-  await fsp.rm(manifest, { force: true });
 
   const stat = await fsp.stat(tarballPath);
   const sha256 = await sha256OfFile(tarballPath);

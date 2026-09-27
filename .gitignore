@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-kernel/
 resources/
 *.log
 .DS_Store
