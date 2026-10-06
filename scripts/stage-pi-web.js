@@ -19,7 +19,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 // Pin to a known-working version. Bump to test upgrades.
-const PI_WEB_VERSION = '0.9.3';
+const PI_WEB_VERSION = '0.10.0';
 
 const RESOURCES_DIR = path.join(__dirname, '..', 'resources');
 const STAGE_DIR = path.join(RESOURCES_DIR, 'pi-web');
