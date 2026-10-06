@@ -98,6 +98,16 @@ function main() {
   if (!fs.existsSync(pkgJson)) {
     throw new Error('Stage install succeeded but @agegr/pi-web/package.json not found.');
   }
+
+  // Synchronize shell branding icon into pi-web's web frontend icons
+  const appIcon = path.join(__dirname, '..', 'assets', 'icon.png');
+  const webIconsDir = path.join(STAGE_DIR, 'node_modules', '@agegr', 'pi-web', 'public', 'icons');
+  if (fs.existsSync(appIcon) && fs.existsSync(webIconsDir)) {
+    for (const name of ['icon-192.png', 'icon-512.png', 'apple-touch-icon.png']) {
+      fs.copyFileSync(appIcon, path.join(webIconsDir, name));
+    }
+  }
+
   const installed = JSON.parse(fs.readFileSync(pkgJson, 'utf8'));
   console.log(`[stage-pi-web] Staged @agegr/pi-web@${installed.version} successfully.`);
 }

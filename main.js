@@ -1077,6 +1077,11 @@ function createMainWindow() {
     },
   });
 
+  // Ensure webpage favicon does not override desktop app window icon
+  mainWindow.on('page-favicon-updated', (event) => {
+    event.preventDefault();
+  });
+
   if (bounds.isMaximized) {
     mainWindow.maximize();
   }
