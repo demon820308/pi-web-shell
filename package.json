@@ -16,9 +16,9 @@
     "stage:pi-web": "node scripts/stage-pi-web.js",
     "stage": "npm run fetch:node && npm run stage:pi-web",
     "build:dir": "npm run stage && electron-builder --win --x64 --dir",
-    "build": "npm run stage && electron-builder --win --x64",
-    "build:zip": "npm run stage && electron-builder --win zip --x64",
-    "build:installer": "npm run stage && electron-builder --win nsis --x64",
+    "build": "npm run stage && electron-builder --win --x64 --publish never",
+    "build:zip": "npm run stage && electron-builder --win zip --x64 --publish never",
+    "build:installer": "npm run stage && electron-builder --win nsis --x64 --publish never",
     "release:kernel": "node scripts/release.js",
     "release:kernel:upload": "node scripts/release.js --upload"
   },
@@ -75,6 +75,7 @@
     ],
     "asar": true,
     "asarUnpack": [],
+    "publish": null,
     "win": {
       "target": [
         {
@@ -91,7 +92,7 @@
         }
       ],
       "icon": "build/icon.ico",
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
+      "artifactName": "Pi-Web-${version}-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -100,7 +101,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Pi Web",
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "artifactName": "Pi-Web-Setup-${version}.${ext}"
     }
   }
 }
