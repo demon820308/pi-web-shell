@@ -1179,11 +1179,11 @@ function buildMenu() {
       label: 'File',
       submenu: [
         {
-          label: '设置服务端口 (Port)...',
+          label: '设置服务端口 (Port)',
           click: () => openPortSettings(),
         },
         {
-          label: '技能密钥设置 (Skill Keys)...',
+          label: '技能密钥设置 (Skill Keys)',
           click: () => openSkillKeysSettings(),
         },
         {
@@ -1218,10 +1218,10 @@ function buildMenu() {
       ],
     },
     {
-      label: '更新 (Update)',
+      label: 'Update',
       submenu: [
         {
-          label: '检查更新 (Check for Updates…)',
+          label: '检查更新 (Check for Updates)',
           click: () => triggerUpdateCheck({ manual: true }),
         },
         {
