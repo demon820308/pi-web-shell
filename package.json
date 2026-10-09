@@ -1,6 +1,6 @@
 {
   "name": "pi-web-shell",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Desktop shell wrapper for @agegr/pi-web. Embeds Node.js + pi-web into a standalone EXE.",
   "private": true,
   "main": "main.js",
