@@ -1,244 +1,272 @@
-# pi-web-shell
+<div align="center">
+  <img src="assets/icon.png" alt="Pi Web" width="100" />
+  <h1>Pi Web 桌面客户端</h1>
+  <p><strong>基于 Electron + Node.js + @agegr/pi-web 的零依赖、独立解耦、支持内核静默热更新的智能 AI Coding 桌面工作台</strong></p>
+  <p>
+    <a href="https://github.com/demon820308/pi-web-shell/releases/latest">下载安装包/便携版 v0.2.6</a> ·
+    <a href="#-核心功能特性">核心特性</a> ·
+    <a href="#-快速上手">快速上手</a> ·
+    <a href="#-内核热更新与容灾回滚">内核热更新</a> ·
+    <a href="#%EF%B8%8F-技术架构">技术架构</a> ·
+    <a href="#%EF%B8%8F-构建与发布打包">构建与发布</a> ·
+    <a href="#%EF%B8%8F-环境与参数配置">配置选项</a> ·
+    <a href="#-开源鸣谢">开源鸣谢</a> ·
+    <a href="#-开源协议">开源协议</a>
+  </p>
+  <p>
+    <a href="https://github.com/demon820308/pi-web-shell/releases/latest"><img src="https://img.shields.io/github/v/release/demon820308/pi-web-shell?color=orange&label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC" alt="最新版本" /></a>
+    <img src="https://img.shields.io/badge/%E7%89%88%E6%9C%AC-v0.2.6-green" alt="版本 v0.2.6" />
+    <img src="https://img.shields.io/badge/%E5%B9%B3%E5%8F%B0-Windows%20x64-blue" alt="Windows x64" />
+    <img src="https://img.shields.io/badge/%E6%A1%86%E6%9E%B6-Electron%2033%20%2B%20Node.js%2022-brightgreen" alt="Electron 33 + Node.js 22" />
+    <img src="https://img.shields.io/badge/%E5%86%85%E6%A0%B8-%40agegr%2Fpi--web%20v0.12.2-orange" alt="@agegr/pi-web" />
+    <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/%E5%BC%80%E6%BA%90%E5%8D%8F%E8%AE%AE-MIT-blue" alt="MIT" /></a>
+  </p>
+</div>
 
-A lightweight **Electron** wrapper that turns [@agegr/pi-web](https://github.com/agegr/pi-web)
-into a standalone, zero-dependency desktop app on Windows.
+---
 
-## What it does
+## ⚡ 零依赖开箱即用 · 架构完全解耦 · 静默热更新与安全回滚
 
-```
-┌──────────────────────────────────────────────────┐
-│  pi-web-shell/                                   │
-│  ├─ Electron main (main.js)                      │
-│  │   ├─ Resolves bundled Node + pi-web           │
-│  │   ├─ Spawns them as a child process           │
-│  │   ├─ Watches stdout for "Ready"               │
-│  │   └─ Background kernel updater (lib/)         │
-│  └─ BrowserWindow                                │
-│      ├─ Loading screen (renderer/)               │
-│      ├─ Update banner                            │
-│      └─ Navigates to localhost:30141             │
-└─────────────────┬────────────────────────────────┘
-                  │ child_process.spawn
-                  ▼
-┌──────────────────────────────────────────────────┐
-│  Bundled inside the EXE:                         │
-│  ├─ resources/node/v22.19.0/node.exe             │
-│  ├─ resources/pi-web/         (active kernel)     │
-│  ├─ resources/pi-web-backup/ (previous version)   │
-│  └─ resources/pi-web-incoming/ (downloaded, swap) │
-└──────────────────────────────────────────────────┘
-```
+| 🚀 零依赖 · 开箱即用 | 🛡️ 架构解耦 · 独立沙箱 | 🔄 静默热更新 · 失败自愈 |
+| :--- | :--- | :--- |
+| 内置便携版 **Node.js (v22.19.0)** 与完整 `node_modules` 依赖，打包为独立 EXE / ZIP，用户电脑无需预先安装任何 Node.js 开发环境。 | **Shell 与内核彻底解耦**：宿主窗口通过独立子进程以黑盒方式运行内核，仅通过本地安全端口与 IPC 通信，零侵入无缝集成。 | 内置内核自动更新引擎，后台静默下载、原子无损切换、若连续 3 次启动异常自动回滚至稳定版本，告别频繁重装软件。 |
 
-**The shell and the main program are completely separated.** The shell:
-- Never modifies pi-web's source code.
-- Spawns pi-web as an opaque child process.
-- Communicates with pi-web only through `child_process` and HTTP on `127.0.0.1:30141`.
-- Upgrading pi-web is hot: the shell silently downloads a new kernel and
-  prompts the user to restart.
+---
 
-## Features
+## 🌟 核心功能特性
 
-- **Zero-install runtime** — Node.js v22.19.0 and pi-web's full `node_modules`
-  are bundled via electron-builder `extraResources`.
-- **Single instance** — a second launch raises the existing window instead of
-  spawning another server.
-- **Port management** — defaults to `30141`, auto-falls-back to the next free
-  port (up to +30) when busy. Configurable via *File → 设置服务端口 (Port)*;
-  the choice is persisted in `userData/settings.json`.
-- **Skill key manager** — *File → 技能密钥设置 (Skill Keys)*. Detects installed
-  skills under `~/.pi/agent/skills/` (built-in: Tavily / Firecrawl / Brave /
-  GitHub, plus any `SKILL.md` referencing `*_API_KEY`-style variables), lets you
-  enter keys with masked display, and syncs them to `~/.pi/agent/.env`, which is
-  merged into the child process environment.
-- **System tray** — show window, restart service, skill keys, view log, quit.
-  Closing the window minimizes to the tray and keeps pi-web running; use the
-  tray's "彻底退出" (or *File → 彻底退出*) to actually stop the service.
-- **Auto-start toggle** — *File → 开机自动启动 (Launch at Startup)*.
-- **File logging** — the shell appends to `userData/logs/pi-web.log`;
-  *Help → 查看运行日志* opens the file, plus "Open Logs Folder" /
-  "Open Data Folder" entries.
-- **Window state persistence** — position and size are remembered across runs.
-- **Kernel hot-update** — see below.
+### 1. 🚀 原生级免安装与独立运行环境 (Zero-install Runtime)
+- **自带运行时环境**：安装包内直接打包便携版 Node.js v22.19.0 以及 `@agegr/pi-web` 的全量运行时依赖，双击即开，真正实现普通用户零门槛使用。
+- **开箱即用**：提供标准 NSIS 单用户安装包（无需管理员权限）以及免安装便携版（绿色解压即用），不污染用户系统全局环境。
 
-## Kernel hot-updates
+### 2. 🛡️ 架构解耦与透明进程管理 (Decoupled Architecture)
+- **不改动内核源码**：Shell 仅仅作为轻量级宿主容器，通过 `child_process.spawn` 启动内核，并监听标准输出就绪信号（Ready）。
+- **智能单例运行**：内置单例锁（Single Instance Lock），重复启动时自动聚焦并置顶已有主窗口，避免多次运行造成服务端口冲突。
+- **智能端口调度与冲突自愈**：服务默认监听 `30141` 端口；若端口被占用，自动递增探测可用端口（最多 +30 个端口）。同时支持在菜单栏「文件 → 设置服务端口」中手动自定义，设置自动持久化。
 
-Only the **pi-web kernel** is updated automatically, not the shell or Node.js.
-Update flow:
+### 3. 🔄 内核静默热更新与容灾回滚 (Kernel Hot-Updates & Auto Rollback)
+- **超轻量更新体积**：每次仅更新 `pi-web` 核心包（压缩包约 220MB），相比重新下载完整桌面安装包（~300MB）速度更快、开销更低。
+- **平滑无感升级**：后台静默检测并下载更新包，完成后右下角弹窗提示“立即重启”；用户确认后执行秒级原子目录替换并重启内核。
+- **3 次异常自动回滚**：如果新内核连续 3 次未能成功就绪启动，系统将自动触发安全回滚机制，恢复至上一个正常运行的备份版本，确保业务永不中断。
 
-1. On startup (and via *Kernel → Check for updates…*), the shell fetches an
-   update manifest. Two formats are supported:
-   - **GitHub Releases API** (default):
-     `https://api.github.com/repos/agegr/pi-web/releases/latest` — parses the
-     release JSON for a kernel tarball asset; SHA-256 is verified when a
-     `<tarball>.sha256` sidecar asset exists. A 404 means "no release yet" and
-     stays silent.
-   - **Custom manifest JSON** via `PI_WEB_UPDATE_MANIFEST_URL` — strict schema
-     (`schemaVersion=1`, `kernel.{version,tarball,sha256,size}`) with mandatory
-     SHA-256 verification.
-2. If the manifest's version is newer than the installed one, the shell
-   **silently downloads** the new kernel tarball in the background.
-3. While downloading, the user sees a small banner in the corner with progress.
-4. When the download completes, a **"Restart now"** button appears.
-5. Clicking it: stops the child process → atomic-renames
-   `pi-web/` → `pi-web-backup/` and `pi-web-incoming/` → `pi-web/`
-   → restarts the child against the new kernel.
-6. If the new kernel fails to start 3 times in a row, the shell
-   **auto-rolls back** to the previous version (`STARTUP_FAILURE_THRESHOLD = 3`).
+### 4. 🧰 技能密钥与环境管理 (Skill Key Manager)
+- **可视化密钥配置**：支持在菜单栏「文件 → 技能密钥设置」中直观管理 AI 技能所需的 API Key（如 Tavily、Firecrawl、Brave、GitHub 等）。
+- **自动探测与同步**：自动扫描 `~/.pi/agent/skills/` 目录中的技能定义（支持 `SKILL.md` 中引用的各类 `*_API_KEY` 变量），提供密文掩码显示并同步写入 `~/.pi/agent/.env`，启动时自动注入内核子进程。
 
-Update payload is ~220 MB compressed (vs ~300 MB for a full EXE). User
-never sees a browser redirect or a download dialog. Update state lives in
-`userData/update-state.json`; *Kernel → Open update log* shows its history.
+### 5. 📌 系统托盘与常驻后台 (System Tray & Resident Mode)
+- **托盘常驻运行**：点击窗口关闭按钮自动最小化至系统托盘，AI 任务在后台持续运转不受打扰；支持在托盘中一键重启服务、配置密钥、查看运行日志或彻底退出。
+- **开机自启支持**：支持菜单栏勾选「文件 → 开机自动启动」，系统登录后自动在后台拉起服务。
+- **窗口与日志追踪**：自动记录并持久化窗口尺寸与屏幕位置；内置运行日志收集，支持菜单栏一键打开日志文件与用户数据目录。
 
-## Running from source (dev mode)
+---
+
+## 📦 快速上手
+
+### 方式一：Windows 桌面客户端（推荐日常使用）
+
+无需安装 Node.js 或 Git，解压/安装即用！
+
+1. 前往 [Releases 发布页面](https://github.com/demon820308/pi-web-shell/releases/latest) 下载最新版本：
+   - **`Pi-Web-Setup-0.2.6.exe`**（标准安装程序，无需管理员权限）或
+   - **`Pi-Web-0.2.6-x64.zip`**（绿色免安装便携版）；
+2. 双击运行 **`Pi-Web.exe`**；
+3. 客户端将自动唤起内置 Node.js 并运行内核，加载完毕后直接呈现全功能 Web 控制台！
+
+---
+
+### 方式二：开发者源码本地运行
+
+如果您需要对 Shell 外壳进行二次开发或定制功能：
 
 ```bash
+# 1. 克隆代码仓库
+git clone https://github.com/demon820308/pi-web-shell.git
 cd pi-web-shell
+
+# 2. 安装项目依赖
 npm install
-npm run stage          # one-time: download Node + install pi-web into resources/
-npm start              # launch shell, spawns bundled pi-web
-npm run dev            # same, with --enable-logging (verbose child logs)
-```
 
-For dev with a system Node and globally installed pi-web:
-```bash
-npm install -g @agegr/pi-web@latest
-npm start              # falls back to system Node + global pi-web when resources/ is absent
-```
-
-Resolution order for the pi-web binary and Node:
-1. Bundled `resources/` (primary path in packaged builds)
-2. Env overrides (`PI_WEB_BIN` / `PI_WEB_NODE`) for dev/testing
-3. System Node.js + global pi-web (dev convenience)
-4. `npx` fallback (downloads `@latest` on first run)
-
-## Building an EXE (Windows)
-
-```bash
-npm run build              # NSIS installer + zip
-npm run build:installer    # NSIS installer only
-npm run build:zip          # zip only
-npm run build:dir          # unpacked win-unpacked/ directory (for testing)
-```
-
-Pipeline: `fetch-node.js` → `stage-pi-web.js` → `electron-builder`.
-
-Outputs in `dist/`:
-- `Pi Web-Setup-<version>.exe` — NSIS installer (per-user, no admin needed).
-- `Pi Web-<version>-x64.zip` — portable zip.
-
-CI (`.github/workflows/build.yml`) runs `npm run build` on every push to `main`
-and on `v*` tags, uploads the artifacts, and creates a **draft** GitHub release
-for manual publishing.
-
-## Releasing a kernel update
-
-```bash
-# Bump PI_WEB_VERSION in scripts/stage-pi-web.js, then:
+# 3. 准备运行时依赖（下载便携 Node.js 并安装 pi-web 内核至 resources/）
 npm run stage
-npm run release:kernel             # builds tarball + manifest in dist-kernel/
-npm run release:kernel:upload      # also uploads via gh CLI
+
+# 4. 启动桌面端调试
+npm start
+
+# 或以日志调试模式启动（输出详细子进程日志）
+npm run dev
 ```
 
-The release script (`scripts/release.js`):
-1. Walks `resources/pi-web/` and excludes dev/test/source-map/docs.
-2. `tar -czf`s the result into a versioned tarball (~220 MB).
-3. Computes SHA-256.
-4. Emits `kernel-manifest.json` pointing at the tarball.
-5. Optionally `gh release create`s both files (tag `pi-web-kernel-<version>`).
+> **💡 调试提示**：如果本地已有全局 Node 和 `@agegr/pi-web`，当 `resources/` 目录未初始化时，Shell 会自动回退调用系统的全局 Node.js 和全局 pi-web 执行。
 
-Options: `--version V`, `--output DIR`, `--shell-version V`,
-`--manifest-url URL`, `--upload`.
+---
 
-## Build & release pipeline
+## 🔄 内核热更新与容灾回滚
 
-| Script                          | What it does                                          |
-|---------------------------------|-------------------------------------------------------|
-| `npm start` / `npm run dev`     | Launch the shell from source                          |
-| `npm run fetch:node`            | Download Node.js portable to `resources/node/v22.19.0/` |
-| `npm run stage:pi-web`          | Install `@agegr/pi-web@<ver>` to `resources/pi-web/`  |
-| `npm run stage`                 | Both of the above                                     |
-| `npm run build`                 | Stage + electron-builder (NSIS + zip)                 |
-| `npm run build:installer`       | Stage + electron-builder (NSIS only)                  |
-| `npm run build:zip`             | Stage + electron-builder (zip only)                   |
-| `npm run build:dir`             | Stage + electron-builder (unpacked directory)         |
-| `npm run release:kernel`        | Build kernel tarball + manifest                       |
-| `npm run release:kernel:upload` | Same, then `gh release create`                        |
+桌面客户端采用**「外壳（Shell）与内核（Kernel）分离」**的热更新设计，升级时无需重新下载与覆盖安装整个桌面应用程序：
 
-`fetch:node` and `stage:pi-web` are **idempotent** — they skip when the
-right version is already present. Pinned versions live at the top of each
-script (`NODE_VERSION` in `fetch-node.js`, `PI_WEB_VERSION` in
-`stage-pi-web.js`).
-
-## Configuration
-
-| Env var                       | Purpose                                              |
-|-------------------------------|------------------------------------------------------|
-| `PORT`                        | Override pi-web's listen port (default `30141`)      |
-| `PI_WEB_HOSTNAME`             | Override bind hostname (default `127.0.0.1`)         |
-| `PI_WEB_BIN`                  | Absolute path to a specific `pi-web.js` to spawn     |
-| `PI_WEB_NODE`                 | Absolute path to a specific `node` binary to use     |
-| `PI_WEB_PASSWORD`             | Enable HTTP Basic Auth (passed through to pi-web)    |
-| `PI_WEB_UPDATE_MANIFEST_URL`  | Override the update manifest URL                     |
-| `PI_WEB_UPDATE_DISABLED=1`    | Disable automatic update checks                      |
-
-Keys from `~/.pi/agent/.env` are merged into the child environment as well.
-
-## Project structure
-
+```text
+  [ 检查更新 (GitHub Release / 自定义 Manifest) ]
+                       │
+                       ▼
+         [ 后台静默下载 kernel.tar.gz ]
+                       │
+                       ▼
+       [ 校验 SHA-256 完整性并解压到 incoming ]
+                       │
+                       ▼
+         [ 桌面右下角提示：已就绪，立即重启 ]
+                       │
+        ┌──────────────┴──────────────┐
+        ▼                             ▼
+   [ 用户点击重启 ]             [ 用户稍后处理 ]
+        │                             │
+        ▼                             ▼
+  停止内核子进程                 下次启动时生效
+        │
+        ▼
+  原子目录重命名替换:
+  pi-web/          ──> pi-web-backup/
+  pi-web-incoming/ ──> pi-web/
+        │
+        ▼
+  启动新版本内核
+        │
+        ├─► 启动成功 (检测到 Ready) ──► 更新完成！
+        │
+        └─► 连续失败 3 次 ──────────► 自动触发回滚恢复 pi-web-backup
 ```
+
+- **热更新日志**：可通过菜单「内核 → 查看更新日志」查看当前更新状态及历史版本（存储在 `userData/update-state.json`）。
+- **自定义更新源**：支持通过环境变量 `PI_WEB_UPDATE_MANIFEST_URL` 指定私有分发服务器地址。
+
+---
+
+## 🏗️ 技术架构
+
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│                   Pi Web Shell (Electron 宿主)                   │
+│                                                                  │
+│  ┌───────────────────────┐          ┌─────────────────────────┐  │
+│  │   Electron 主进程     │          │   BrowserWindow 渲染层  │  │
+│  │   (main.js)           │          │   (renderer/)           │  │
+│  │                       │          │                         │  │
+│  │  ├─ 端口探测与容灾    │ ◄──────► │  ├─ 启动加载与错误页面  │  │
+│  │  ├─ 托盘与菜单调度    │   IPC    │  ├─ 热更新悬浮提示条    │  │
+│  │  ├─ 密钥环境管理      │          │  ├─ 端口与密钥弹窗配置  │  │
+│  │  └─ 内核热更新状态机  │          │  └─ 承载 Web 控制台界面 │  │
+│  └───────────┬───────────┘          └────────────▲────────────┘  │
+└──────────────┼───────────────────────────────────┼───────────────┘
+               │ child_process.spawn               │
+               │ (内置 Node.js 执行)               │ HTTP (127.0.0.1:30141)
+               ▼                                   │
+┌──────────────────────────────────────────────────┼───────────────┐
+│              内置独立运行时 (EXE Resources 目录) │               │
+│                                                  │               │
+│  ├─ resources/node/v22.19.0/node.exe             │               │
+│  ├─ resources/pi-web/                 ───────────┘               │
+│  │   (当前运行内核，含独立 node_modules / Next 产物)             │
+│  ├─ resources/pi-web-backup/                                     │
+│  │   (前一版本备份，用于启动失败快速回滚)                        │
+│  └─ resources/pi-web-incoming/                                   │
+│      (后台静默下载完毕、等待热替换的新版本)                      │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🛠️ 构建与发布打包
+
+### 本地构建产物
+
+项目通过 `electron-builder` 进行封装，执行以下命令前请先执行 `npm run stage` 准备运行时资产：
+
+| 脚本命令 | 对应行为说明 |
+| :--- | :--- |
+| `npm run stage` | 一键下载便携版 Node.js 并固化 `@agegr/pi-web` 至 `resources/` 目录 |
+| `npm run build` | 完整构建 Windows NSIS 安装程序（`.exe`）与绿色便携版（`.zip`） |
+| `npm run build:installer` | 仅构建 Windows NSIS 安装包 |
+| `npm run build:zip` | 仅构建绿色便携 ZIP 压缩包 |
+| `npm run build:dir` | 仅生成已解压的目录产物（`dist/win-unpacked/`，方便本地调试） |
+
+打包生成的文件输出在 `dist/` 目录下：
+- **`Pi-Web-Setup-<version>.exe`**：适合普通用户的单用户安装包。
+- **`Pi-Web-<version>-x64.zip`**：即开即用的免安装绿色便携包。
+
+### 独立内核发布（维护者）
+
+当仅需更新 `pi-web` 内核时，可直接打包轻量级内核增量包：
+
+```bash
+# 1. 在 scripts/stage-pi-web.js 中更新 PI_WEB_VERSION
+# 2. 重新拉取新版本内核资源
+npm run stage
+
+# 3. 生成内核 tarball 与更新清单 (位于 dist-kernel/ 目录)
+npm run release:kernel
+
+# 4. 生成并通过 GitHub CLI (gh) 自动上传发布到 GitHub Releases
+npm run release:kernel:upload
+```
+
+---
+
+## ⚙️ 环境与参数配置
+
+可以通过系统环境变量或配置文件对客户端运行参数进行深度自定义：
+
+| 环境变量名称 | 默认值 | 配置说明 |
+| :--- | :--- | :--- |
+| `PORT` | `30141` | 自定义内核 HTTP 服务监听端口（也可在菜单界面内直接修改） |
+| `PI_WEB_HOSTNAME` | `127.0.0.1` | 绑定监听的主机地址 |
+| `PI_WEB_BIN` | - | 开发者调试：强制指定自定义的 `pi-web.js` 入口文件绝对路径 |
+| `PI_WEB_NODE` | - | 开发者调试：强制指定自定义的 `node.exe` 二进制文件绝对路径 |
+| `PI_WEB_PASSWORD` | - | 开启 HTTP 基础身份验证（Basic Auth）密码 |
+| `PI_WEB_UPDATE_MANIFEST_URL` | - | 覆盖默认的 GitHub Release 更新源，指定私有 Manifest 清单 URL |
+| `PI_WEB_UPDATE_DISABLED` | `0` | 设置为 `1` 时彻底禁用自动检查与后台热更新功能 |
+
+> 此外，用户主目录下的 `~/.pi/agent/.env` 文件中的配置项会在程序启动时自动合并并注入到内核运行环境中。
+
+---
+
+## 📁 项目目录结构
+
+```text
 pi-web-shell/
-├── package.json             # electron-builder config + scripts
-├── main.js                  # Electron main process
-├── preload.js               # Context bridge (sandboxed renderer)
-├── renderer/
-│   ├── index.html           # Loading + error + update banner
-│   ├── port-settings.html   # Port configuration dialog
-│   ├── skill-keys.html      # Skill key manager dialog
-│   ├── renderer.js
-│   └── styles.css
-├── lib/                     # Updater modules
-│   ├── manifest-client.js   # Fetch + validate update manifest
-│   ├── update-state.js      # Persisted update state in userData/
-│   └── kernel-updater.js    # State machine: check → download → apply → rollback
-├── scripts/
-│   ├── fetch-node.js        # Download Node.js portable at build time
-│   ├── stage-pi-web.js      # Install pi-web into resources/ at build time
-│   └── release.js           # Build kernel tarball + manifest
-├── resources/               # Gitignored, regenerated by `npm run stage`
-│   ├── node/v22.19.0/       # Bundled Node.js runtime
-│   └── pi-web/node_modules/ # Bundled pi-web + all transitive deps
-├── assets/                  # app icon source (icon.png, 192x192)
-└── build/                   # electron-builder build resources (icon.ico)
+├── assets/                  # 应用图标资源 (icon.png)
+├── build/                   # 构建图标与配置资源 (icon.ico)
+├── lib/                     # 内核热更新状态机与校验核心模块
+│   ├── manifest-client.js   # 获取与校验更新清单 (GitHub API / 自定义 JSON)
+│   ├── update-state.js      # 更新状态持久化与日志存储 (userData/update-state.json)
+│   └── kernel-updater.js    # 热更新状态流转、静默下载、原子替换与回滚逻辑
+├── renderer/                # 渲染层页面与轻量交互视图
+│   ├── index.html           # 启动就绪动画、异常屏与热更新悬浮提示条
+│   ├── port-settings.html   # 端口自定义设置弹窗界面
+│   ├── skill-keys.html      # 技能密钥可视化配置面板
+│   ├── renderer.js          # 渲染层交互脚本
+│   └── styles.css           # 界面样式表
+├── scripts/                 # 构建与固化自动化脚本
+│   ├── fetch-node.js        # 构建前自动拉取官方 Node.js 便携版
+│   ├── stage-pi-web.js      # 构建前固化 @agegr/pi-web 运行时至 resources
+│   └── release.js           # 内核增量发布构建打包脚本
+├── resources/               # (Git 忽略) 打包时内置的独立运行时资源
+│   ├── node/v22.19.0/       # 便携版 Node.js 运行时
+│   └── pi-web/              # 完整的 pi-web 依赖及静态产物
+├── main.js                  # Electron 主进程 (生命周期、子进程管理、托盘、菜单)
+├── preload.js               # 安全沙箱桥接脚本 (Context Bridge)
+├── package.json             # 项目元信息、构建脚本及 electron-builder 配置
+└── README.md                # 项目说明文档
 ```
 
-## Not yet done
+---
 
-These are still deferred:
-- Windows code signing (unsigned EXEs trigger SmartScreen warnings).
-- macOS / Linux packaging (builds currently target Windows x64 only).
-- Differential update deltas (full kernel tarball every time).
+## 🙏 致谢与开源鸣谢
 
-## Verified
+- 核心内核由 [@agegr/pi-web](https://github.com/agegr/pi-web) 提供，感谢原作者优秀的 AI Coding Agent Web 工作台与开源贡献！
+- 桌面外壳基于 [Electron](https://www.electronjs.org/) 与 [electron-builder](https://www.electron.build/) 构建。
 
-End-to-end test of the auto-update pipeline (using the staged pi-web):
+---
 
-```
-Tarball size: 233.5 MB
- [checking] [available]
-check.reason=newer
-download+extract: <seconds>
-extracted version: 0.9.0
-BUILD_ID: Z_vA4pWAChTab5s3FVVi8
- [applying] [applied]
-applied: 0.9.0
-PASS
-```
+## 📄 开源协议
 
-Smoke test of bundled Node + bundled pi-web (no Electron):
-
-```
-resources/node/v22.19.0/node.exe \
-  resources/pi-web/node_modules/@agegr/pi-web/bin/pi-web.js \
-  --no-open -p 30149
-```
-Server ready in ~780 ms; HTTP GET returns a 9.9 KB HTML page.
+本项目采用 [MIT 许可证](https://opensource.org/licenses/MIT) 开源发布。
